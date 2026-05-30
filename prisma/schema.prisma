@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  role      String   @default("customer")
+  avatar    String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  emoji    String
+  color    String
+  products Product[]
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  description String
+  price       Float
+  mrp         Float
+  unit        String
+  emoji       String
+  badge       String?
+  brand       String
+  rating      Float       @default(4.5)
+  reviews     Int         @default(0)
+  stock       Int         @default(100)
+  tags        String
+  nutrition   String?
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Order {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  items          OrderItem[]
+  subtotal       Float
+  discount       Float        @default(0)
+  deliveryCharge Float        @default(25)
+  total          Float
+  status         String       @default("pending")
+  paymentMethod  String       @default("UPI")
+  paymentStatus  String       @default("paid")
+  promoCode      String?
+  address        String
+  deliveryBoyId  String?
+  deliveryBoy    DeliveryBoy? @relation(fields: [deliveryBoyId], references: [id])
+  deliveredAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  qty       Int
+  price     Float
+  name      String
+  emoji     String
+}
+
+model DeliveryBoy {
+  id              String   @id @default(cuid())
+  name            String
+  email           String   @unique
+  phone           String
+  password        String
+  area            String
+  status          String   @default("active")
+  rating          Float    @default(4.5)
+  totalDeliveries Int      @default(0)
+  todayDeliveries Int      @default(0)
+  earnings        Float    @default(0)
+  vehicleType     String   @default("Motorcycle")
+  vehicleNumber   String?
+  createdAt       DateTime @default(now())
+  orders          Order[]
+}
+
+model PromoCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  discount    Float
+  type        String
+  minOrder    Float    @default(0)
+  maxDiscount Float    @default(999)
+  description String
+  active      Boolean  @default(true)
+  usedCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
