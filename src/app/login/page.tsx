@@ -4,77 +4,87 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { ShoppingCart, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Loader2, User, LayoutDashboard, Bike } from 'lucide-react'
+import AuthShell, { Field, inputClass } from '@/components/AuthShell'
+
+const DEMO = [
+  { role: 'customer', label: 'Customer', icon: User, email: 'demo@freshkart.com', password: 'demo123', to: '/' },
+  { role: 'admin', label: 'Admin', icon: LayoutDashboard, email: 'admin@freshkart.com', password: 'admin123', to: '/admin' },
+  { role: 'delivery', label: 'Delivery', icon: Bike, email: 'ravi@freshkart.com', password: 'delivery123', to: '/delivery' },
+] as const
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
-  const router = useRouter()
+  const [loading, setLoading] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const res = await signIn('credentials', { email, password, redirect: false })
-    setLoading(false)
-    if (res?.ok) { toast.success('Welcome back! 🎉'); router.push('/') }
-    else toast.error('Invalid email or password')
-  }
-
-  const demoLogin = async (role: string) => {
-    setLoading(true)
-    const creds = role === 'admin' ? { email: 'admin@freshkart.com', password: 'admin123' } : role === 'delivery' ? { email: 'ravi@freshkart.com', password: 'delivery123' } : { email: 'demo@freshkart.com', password: 'demo123' }
+  const login = async (creds: { email: string; password: string }, to: string, key: string) => {
+    setLoading(key)
+    setError('')
     const res = await signIn('credentials', { ...creds, redirect: false })
-    setLoading(false)
+    setLoading(null)
     if (res?.ok) {
-      toast.success(`Logged in as ${role}!`)
-      router.push(role === 'admin' ? '/admin' : role === 'delivery' ? '/delivery' : '/')
+      toast.success('Logged in')
+      router.push(to)
+      router.refresh()
+    } else {
+      setError('That email and password don’t match. Please try again.')
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md">
-        <Link href="/" className="flex items-center gap-2 justify-center mb-6">
-          <ShoppingCart className="text-green-600" size={28} />
-          <span className="text-2xl font-black text-green-600">FreshKart</span>
-        </Link>
-        <h1 className="text-2xl font-black text-gray-800 text-center mb-1">Welcome Back! 👋</h1>
-        <p className="text-sm text-gray-400 text-center mb-6">Login to continue shopping</p>
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" required className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-green-500 transition-colors" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
-            <div className="relative">
-              <input type={showPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-green-500 transition-colors pr-10" />
-              <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><Eye size={16} /></button>
-            </div>
-          </div>
-          <button type="submit" disabled={loading} className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-70 transition-all">
-            {loading ? 'Logging in...' : 'Login to FreshKart'}
-          </button>
-        </form>
-
-        <div className="my-5 flex items-center gap-3"><div className="flex-1 h-px bg-gray-100" /><span className="text-xs text-gray-400 font-medium">or try demo accounts</span><div className="flex-1 h-px bg-gray-100" /></div>
-
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          {[['Customer', 'customer'], ['Admin', 'admin'], ['Delivery', 'delivery']].map(([label, role]) => (
-            <button key={role} onClick={() => demoLogin(role)} disabled={loading} className="border-2 border-gray-200 hover:border-green-400 rounded-xl py-2 text-xs font-semibold text-gray-600 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-50">
-              {label === 'Customer' ? '👤' : label === 'Admin' ? '⚙️' : '🏍️'}<br />{label}
+    <AuthShell
+      title="Welcome back"
+      subtitle="Log in to check out faster and track your orders."
+      footer={<>New to FreshKart? <Link href="/register" className="font-semibold text-brand-700 hover:underline">Create an account</Link></>}
+    >
+      <form onSubmit={(e) => { e.preventDefault(); login({ email, password }, '/', 'form') }} className="space-y-4" noValidate>
+        <Field id="email" label="Email">
+          <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-invalid={!!error} className={inputClass} />
+        </Field>
+        <Field id="password" label="Password" error={error}>
+          <div className="relative">
+            <input
+              id="password"
+              type={showPass ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Your password"
+              aria-invalid={!!error}
+              aria-describedby={error ? 'password-error' : undefined}
+              className={`${inputClass} pr-12`}
+            />
+            <button type="button" onClick={() => setShowPass((s) => !s)} aria-label={showPass ? 'Hide password' : 'Show password'} className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-gray-500 hover:bg-gray-100">
+              {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
-          ))}
-        </div>
+          </div>
+        </Field>
+        <button type="submit" disabled={!!loading || !email || !password} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-[15px] font-semibold text-white transition hover:bg-brand-700 disabled:bg-gray-200 disabled:text-gray-400">
+          {loading === 'form' && <Loader2 size={18} className="animate-spin" />} Log in
+        </button>
+      </form>
 
-        <p className="text-center text-sm text-gray-400">
-          Don't have an account?{' '}
-          <Link href="/register" className="text-green-600 font-bold hover:underline">Register & Get ₹50 OFF</Link>
-        </p>
+      <div className="my-7 flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+        <span className="h-px flex-1 bg-gray-200" /> Try a demo account <span className="h-px flex-1 bg-gray-200" />
       </div>
-    </div>
+      <div className="grid grid-cols-3 gap-2">
+        {DEMO.map(({ role, label, icon: Icon, email: e, password: p, to }) => (
+          <button
+            key={role}
+            onClick={() => login({ email: e, password: p }, to, role)}
+            disabled={!!loading}
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-200 bg-white py-3 text-[13px] font-medium text-gray-700 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-800 disabled:opacity-50"
+          >
+            {loading === role ? <Loader2 size={18} className="animate-spin" /> : <Icon size={18} />}
+            {label}
+          </button>
+        ))}
+      </div>
+    </AuthShell>
   )
 }

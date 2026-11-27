@@ -1,10 +1,60 @@
 @import "tailwindcss";
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #0C9547; border-radius: 3px; }
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
-@layer utilities {
-  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  --color-brand-50: #eefbf3;
+  --color-brand-100: #d6f5e1;
+  --color-brand-200: #b0eac8;
+  --color-brand-300: #7bd8a6;
+  --color-brand-400: #43bf7f;
+  --color-brand-500: #1fa865;
+  --color-brand-600: #0c9547;
+  --color-brand-700: #0a7a3b;
+  --color-brand-800: #0b6132;
+  --color-brand-900: #0b502b;
+  --color-brand-950: #042d17;
+
+  --color-surface: #f6f7f9;
+  --color-ink: #111827;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-pop: 0 16px 40px -12px rgb(16 24 40 / 0.22);
+
+  --animate-slide-in: slide-in 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-pop-in: pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+
+  @keyframes slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  body { @apply bg-surface text-ink antialiased; }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-brand-600; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

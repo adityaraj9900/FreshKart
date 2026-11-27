@@ -1,99 +1,209 @@
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
+import { CheckCircle2, Package, Bike, Home, ClipboardCheck, MapPin, Phone, XCircle, ShoppingBag, ChevronDown } from 'lucide-react'
 import Header from '@/components/Header'
 import CartSidebar from '@/components/CartSidebar'
-import { Package, Zap, CheckCircle, Clock, Bike, Home } from 'lucide-react'
+import { formatINR, shortId } from '@/lib/catalog'
+import StatusPill from '@/components/StatusPill'
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  pending: { label: 'Pending', color: 'bg-gray-100 text-gray-600', icon: <Clock size={14} /> },
-  confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700', icon: <CheckCircle size={14} /> },
-  processing: { label: 'Packing', color: 'bg-purple-100 text-purple-700', icon: <Package size={14} /> },
-  out_for_delivery: { label: 'On the Way', color: 'bg-orange-100 text-orange-700', icon: <Bike size={14} /> },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-700', icon: <CheckCircle size={14} /> },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-700', icon: <Clock size={14} /> },
+type OrderItem = { id: string; name: string; emoji: string; qty: number; price: number }
+type Order = {
+  id: string; status: string; createdAt: string; deliveredAt?: string | null; address: string; paymentMethod: string
+  subtotal: number; discount: number; deliveryCharge: number; total: number; promoCode?: string | null
+  items: OrderItem[]; deliveryBoy?: { name: string; phone: string } | null
 }
 
+const STEPS = [
+  { key: 'confirmed', label: 'Order confirmed', icon: ClipboardCheck },
+  { key: 'processing', label: 'Packing', icon: Package },
+  { key: 'out_for_delivery', label: 'On the way', icon: Bike },
+  { key: 'delivered', label: 'Delivered', icon: Home },
+]
+const ACTIVE = ['pending', 'confirmed', 'processing', 'out_for_delivery']
+
 function OrdersContent() {
-  const { data: session, status } = useSession()
-  const [orders, setOrders] = useState<any[]>([])
+  const { status } = useSession()
+  const router = useRouter()
+  const newId = useSearchParams().get('new')
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [cartOpen, setCartOpen] = useState(false)
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const newOrderId = searchParams.get('new')
+
+  const load = useCallback(() => fetch('/api/orders').then((r) => (r.ok ? r.json() : [])).then(setOrders).finally(() => setLoading(false)), [])
 
   useEffect(() => {
-    if (status === 'unauthenticated') { router.push('/login'); return }
-    if (status === 'authenticated') {
-      fetch('/api/orders').then((r) => r.json()).then(setOrders).finally(() => setLoading(false))
-    }
-  }, [status, router])
+    if (status === 'unauthenticated') router.replace('/login')
+    if (status === 'authenticated') load()
+  }, [status, router, load])
+
+  // Keep live orders fresh without a manual reload.
+  const hasActive = orders.some((o) => ACTIVE.includes(o.status))
+  useEffect(() => {
+    if (!hasActive) return
+    const t = setInterval(load, 20000)
+    return () => clearInterval(t)
+  }, [hasActive, load])
+
+  const cancel = async (id: string) => {
+    if (!confirm('Cancel this order?')) return
+    const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) })
+    const data = await res.json()
+    if (!res.ok) { toast.error(data.error || 'This order can no longer be cancelled'); return }
+    toast.success('Order cancelled')
+    load()
+  }
+
+  const active = orders.filter((o) => ACTIVE.includes(o.status))
+  const past = orders.filter((o) => !ACTIVE.includes(o.status))
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header onCartOpen={() => setCartOpen(true)} />
+    <div className="min-h-screen">
+      <Header onCartOpen={() => setCartOpen(true)} activeCategory="" />
       <CartSidebar open={cartOpen} onClose={() => setCartOpen(false)} />
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2"><Package className="text-green-600" /> My Orders</h1>
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">My orders</h1>
 
-        {newOrderId && (
-          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 mb-6 text-center">
-            <div className="text-4xl mb-2">🎉</div>
-            <h2 className="font-black text-green-700 text-lg mb-1">Order Placed Successfully!</h2>
-            <div className="text-sm text-green-600 font-semibold mb-2">Order #{newOrderId.slice(-8)}</div>
-            <div className="flex items-center justify-center gap-2 text-green-700 font-bold"><Zap size={16} /> Arriving in 10 minutes!</div>
+        {newId && (
+          <div role="status" className="mt-5 flex items-center gap-4 rounded-2xl border border-brand-200 bg-brand-50 p-5">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-600 text-white"><CheckCircle2 size={24} /></span>
+            <div>
+              <h2 className="font-bold text-brand-900">Order placed. It’s on its way soon.</h2>
+              <p className="text-sm text-brand-800/80">Order #{shortId(newId)} · We’ll update the status below as it moves.</p>
+            </div>
           </div>
         )}
 
         {loading ? (
-          <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="bg-white rounded-2xl h-32 animate-pulse border border-gray-100" />)}</div>
+          <div className="mt-6 space-y-4">{[0, 1, 2].map((i) => <div key={i} className="h-44 animate-pulse rounded-2xl bg-white shadow-card" />)}</div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-            <div className="text-6xl mb-4">📭</div>
-            <h3 className="font-bold text-gray-700 text-lg mb-2">No orders yet</h3>
-            <p className="text-gray-400 mb-6">Start shopping to see your orders here!</p>
-            <Link href="/" className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold text-sm hover:bg-green-700">Browse Products</Link>
+          <div className="mt-6 flex flex-col items-center rounded-3xl bg-white px-6 py-16 text-center shadow-card">
+            <span className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-brand-50 text-brand-600"><ShoppingBag size={28} /></span>
+            <h2 className="text-lg font-bold text-gray-900">No orders yet</h2>
+            <p className="mt-1 text-sm text-gray-500">Your orders will show up here once you place one.</p>
+            <Link href="/" className="mt-6 inline-flex h-11 items-center rounded-xl bg-brand-600 px-6 text-sm font-semibold text-white hover:bg-brand-700">Start shopping</Link>
           </div>
         ) : (
-          <div className="space-y-4">
-            {orders.map((order) => {
-              const sc = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
-              return (
-                <div key={order.id} className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="font-black text-gray-800">Order #{order.id.slice(-8)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                    </div>
-                    <span className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${sc.color}`}>{sc.icon} {sc.label}</span>
-                  </div>
-                  <div className="flex gap-2 mb-3 flex-wrap">{order.items.map((item: any) => (
-                    <div key={item.id} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2.5 py-1.5 text-xs font-medium text-gray-700">
-                      <span>{item.emoji}</span> {item.name} × {item.qty}
-                    </div>
-                  ))}</div>
-                  <div className="flex items-center justify-between border-t border-gray-50 pt-3">
-                    <div className="text-sm text-gray-500"><span className="font-semibold text-gray-700">₹{order.total}</span> · {order.paymentMethod} · {order.items.length} items</div>
-                    {order.deliveryBoy && <div className="text-xs text-green-600 font-semibold flex items-center gap-1"><Bike size={12} /> {order.deliveryBoy.name}</div>}
-                  </div>
-                  {['confirmed', 'processing', 'out_for_delivery'].includes(order.status) && (
-                    <div className="mt-3 bg-orange-50 rounded-xl px-3 py-2 flex items-center gap-2 text-xs text-orange-700 font-semibold">
-                      <Zap size={12} /> Estimated delivery in <strong>~10 minutes</strong>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <>
+            {active.length > 0 && <Section title="In progress">{active.map((o) => <OrderCard key={o.id} order={o} highlight={o.id === newId} onCancel={cancel} />)}</Section>}
+            {past.length > 0 && <Section title="Past orders">{past.map((o) => <OrderCard key={o.id} order={o} onCancel={cancel} />)}</Section>}
+          </>
         )}
       </main>
     </div>
   )
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</h2>
+      <div className="space-y-4">{children}</div>
+    </section>
+  )
+}
+
+function OrderCard({ order, highlight, onCancel }: { order: Order; highlight?: boolean; onCancel: (id: string) => void }) {
+  const [open, setOpen] = useState(!!highlight)
+  const isActive = ACTIVE.includes(order.status)
+  const cancelled = order.status === 'cancelled'
+  const stepIndex = Math.max(0, STEPS.findIndex((s) => s.key === order.status))
+  const itemCount = order.items.reduce((s, i) => s + i.qty, 0)
+  const date = new Date(order.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+
+  return (
+    <article className={`overflow-hidden rounded-2xl bg-white shadow-card ${highlight ? 'ring-2 ring-brand-500' : ''}`}>
+      <div className="flex items-start justify-between gap-4 p-5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] font-bold text-gray-900">Order #{shortId(order.id)}</span>
+            <StatusPill status={order.status} />
+          </div>
+          <div className="mt-0.5 text-[13px] text-gray-500">{date} · {itemCount} {itemCount === 1 ? 'item' : 'items'}</div>
+          <div className="mt-3 flex -space-x-1.5">
+            {order.items.slice(0, 6).map((i) => (
+              <span key={i.id} title={`${i.name} × ${i.qty}`} className="grid h-10 w-10 place-items-center rounded-xl border-2 border-white bg-gray-50 text-xl">{i.emoji}</span>
+            ))}
+            {order.items.length > 6 && <span className="grid h-10 w-10 place-items-center rounded-xl border-2 border-white bg-gray-100 text-xs font-semibold text-gray-600">+{order.items.length - 6}</span>}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[15px] font-bold text-gray-900">{formatINR(order.total)}</div>
+          <div className="text-xs text-gray-500">{order.paymentMethod}</div>
+        </div>
+      </div>
+
+      {isActive && (
+        <div className="border-t border-gray-100 px-5 py-5">
+          <ol className="grid grid-cols-4">
+            {STEPS.map((s, i) => {
+              const done = i <= stepIndex
+              const Icon = s.icon
+              return (
+                <li key={s.key} className="relative flex flex-col items-center text-center">
+                  {i > 0 && <span className={`absolute right-1/2 top-4 h-0.5 w-full -translate-y-1/2 ${i <= stepIndex ? 'bg-brand-500' : 'bg-gray-200'}`} aria-hidden />}
+                  <span className={`relative z-10 grid h-8 w-8 place-items-center rounded-full ${done ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-400'} ${i === stepIndex ? 'ring-4 ring-brand-100' : ''}`}>
+                    <Icon size={15} />
+                  </span>
+                  <span className={`mt-2 text-[11px] font-medium sm:text-xs ${done ? 'text-gray-900' : 'text-gray-400'}`}>{s.label}</span>
+                </li>
+              )
+            })}
+          </ol>
+          {order.deliveryBoy && (
+            <div className="mt-5 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-brand-700 shadow-card"><Bike size={17} /></span>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{order.deliveryBoy.name}</div>
+                  <div className="text-xs text-gray-500">Your delivery partner</div>
+                </div>
+              </div>
+              {order.deliveryBoy.phone && <a href={`tel:${order.deliveryBoy.phone}`} aria-label={`Call ${order.deliveryBoy.name}`} className="grid h-9 w-9 place-items-center rounded-full bg-white text-brand-700 shadow-card hover:bg-brand-50"><Phone size={16} /></a>}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-gray-100">
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          {open ? 'Hide details' : 'View details'}
+          <ChevronDown size={16} className={`transition ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <div className="space-y-4 px-5 pb-5">
+            <ul className="divide-y divide-gray-100 text-sm">
+              {order.items.map((i) => (
+                <li key={i.id} className="flex items-center justify-between py-2">
+                  <span className="flex items-center gap-2.5 text-gray-700"><span className="text-lg">{i.emoji}</span>{i.name} <span className="text-gray-400">× {i.qty}</span></span>
+                  <span className="font-medium text-gray-900">{formatINR(i.price * i.qty)}</span>
+                </li>
+              ))}
+            </ul>
+            <dl className="space-y-1.5 rounded-xl bg-gray-50 p-4 text-[13px] text-gray-600">
+              <div className="flex justify-between"><dt>Items total</dt><dd>{formatINR(order.subtotal)}</dd></div>
+              {order.discount > 0 && <div className="flex justify-between text-brand-700"><dt>Coupon{order.promoCode ? ` (${order.promoCode})` : ''}</dt><dd>−{formatINR(order.discount)}</dd></div>}
+              <div className="flex justify-between"><dt>Delivery fee</dt><dd>{order.deliveryCharge === 0 ? 'FREE' : formatINR(order.deliveryCharge)}</dd></div>
+              <div className="flex justify-between border-t border-gray-200 pt-2 text-sm font-bold text-gray-900"><dt>Paid</dt><dd>{formatINR(order.total)}</dd></div>
+            </dl>
+            <div className="flex items-start gap-2 text-[13px] text-gray-600"><MapPin size={15} className="mt-0.5 shrink-0 text-gray-400" /> {order.address}</div>
+            {['pending', 'confirmed'].includes(order.status) && !cancelled && (
+              <button onClick={() => onCancel(order.id)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:underline"><XCircle size={15} /> Cancel order</button>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
+  )
+}
+
 export default function OrdersPage() {
-  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-4xl animate-spin">🛒</div></div>}><OrdersContent /></Suspense>
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600" /></div>}>
+      <OrdersContent />
+    </Suspense>
+  )
 }
