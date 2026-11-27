@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireRole } from '@/lib/guards'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -27,6 +28,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireRole('admin')
+  if (auth instanceof NextResponse) return auth
   const body = await req.json()
   const product = await prisma.product.create({ data: { ...body, tags: JSON.stringify(body.tags || []) }, include: { category: true } })
   return NextResponse.json(product, { status: 201 })
