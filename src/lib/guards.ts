@@ -6,7 +6,14 @@ export type Role = 'customer' | 'admin' | 'delivery'
 export type SessionUser = { id: string; role: Role; name?: string | null; email?: string | null }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const session = await getServerSession(authOptions)
+  let session
+  try {
+    session = await getServerSession(authOptions)
+  } catch (err) {
+    // e.g. NEXTAUTH_SECRET missing in production: treat as signed out so public routes still work
+    console.error('[auth] could not read session:', err)
+    return null
+  }
   const user = session?.user as Partial<SessionUser> | undefined
   if (!user?.id || !user.role) return null
   return user as SessionUser

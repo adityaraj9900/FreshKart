@@ -77,9 +77,12 @@ src/
 prisma/                             schema, migrations, seed
 ```
 
-## Deployment note
+## Deploying to Vercel
 
-SQLite works well for local development and a read-only demo, but serverless platforms such as Vercel do not provide a writable, persistent filesystem. For a production deployment, switch the Prisma datasource to a hosted database (for example PostgreSQL) so that registrations and orders persist.
+1. In **Project → Settings → Environment Variables**, add `NEXTAUTH_SECRET` (generate one with `openssl rand -base64 32`). Login will not work without it. `DATABASE_URL` is optional for the demo.
+2. Redeploy.
+
+The seeded `prisma/dev.db` ships with each function and is copied to `/tmp` on first use (`src/lib/db.ts`), so browsing, login, sign-up and checkout all work. Because serverless instances don't share a disk, new sign-ups and orders are temporary. For durable data, point `DATABASE_URL` at a hosted database (for example PostgreSQL) and change the Prisma provider.
 
 ---
 
